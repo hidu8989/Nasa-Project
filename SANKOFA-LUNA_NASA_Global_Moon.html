@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SANKOFA-LUNA // Global Lunar Telemetry & Polar Ice Explorer</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+          },
+          colors: {
+            obsidian: '#09090b',
+            kenteGold: '#e5a132',
+            kenteRed: '#dc3c28',
+            kenteTeal: '#389e8a',
+            polarBlue: '#00d4ff',
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+
+  <!-- Three.js (r128) + GLTFLoader + OrbitControls -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #09090b;
+      color: #f4f4f5;
+    }
+
+    /* Procedural African Geometric Textile Canvas Background */
+    #african-pattern-bg {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* Subtle dark radial vignette so the 3D Moon pops with depth against the weave */
+    #viewport-vignette {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      background: radial-gradient(
+        circle at 58% 52%,
+        rgba(9, 9, 11, 0.25) 0%,
+        rgba(9, 9, 11, 0.58) 48%,
+        rgba(9, 9, 11, 0.86) 100%
+      );
+    }
+
+    /* WebGL Canvas Layer */
+    #webgl-container {
+      position: fixed;
+      inset: 0;
+      z-index: 2;
+    }
+
+    #webgl-container canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    /* Custom Scrollbar for Sidebar */
+    .custom-scroll::-webkit-scrollbar {
+      width: 5px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background: rgba(24, 24, 27, 0.6);
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: rgba(229, 161, 50, 0.35);
+      border-radius: 9999px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb:hover {
+      background: rgba(229, 161, 50, 0.65);
+    }
+
+    /* Pulse indicator for active polar/telemetry beacons */
+    @keyframes polarPulse {
+      0%, 100% { box-shadow: 0 0 8px rgba(0, 212, 255, 0.6); }
+      50% { box-shadow: 0 0 18px rgba(0, 212, 255, 0.95); }
+    }
+    .polar-glow-badge {
+      animation: polarPulse 2.4s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="font-sans antialiased">
+
+  <!-- Layer 0: Procedural African Geometric Textile Background -->
+  <canvas id="african-pattern-bg"></canvas>
+
+  <!-- Layer 1: Atmospheric Vignette -->
+  <div id="viewport-vignette"></div>
+
+  <!-- Layer 2: Three.js 3D Viewport -->
+  <div id="webgl-container"></div>
+
+  <!-- Layer 3: Top Woven Header Bar & Telemetry HUD -->
+  <header class="fixed top-0 left-0 right-0 z-20 pointer-events-none">
+    <!-- Top Woven Kente/Mudcloth Accent Strip -->
+    <canvas id="header-weave-strip" class="w-full h-2 block opacity-95"></canvas>
+
+    <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 md:px-6 bg-zinc-950/80 backdrop-blur-md border-b border-amber-500/20 pointer-events-auto">
+      <!-- Brand Identity -->
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-500 via-red-600 to-teal-500 p-[1.5px] shadow-lg shadow-amber-500/10">
+          <div class="w-full h-full bg-zinc-950 rounded-[6px] flex items-center justify-center">
+            <svg class="w-5 h-5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 3a9 9 0 0 0 0 18" fill="rgba(0, 212, 255, 0.25)" />
+              <path d="M8 12h8M12 8v8" stroke="#00d4ff" stroke-width="1.5" />
+            </svg>
+          </div>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-sm md:text-base font-bold tracking-wider text-zinc-100">
+              SANKOFA-LUNA
+            </h1>
+            <span class="px-2 py-0.5 text-[10px] font-mono font-semibold uppercase tracking-widest rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
+              NASA LRO // GLB
+            </span>
+          </div>
+          <p class="text-[11px] text-zinc-400 font-mono">
+            GLOBAL LUNAR SURFACE &amp; POLAR WATER-ICE TELEMETRY
+          </p>
+        </div>
+      </div>
+
+      <!-- Quick Polar Jump & View Controls -->
+      <div class="flex flex-wrap items-center gap-2">
+        <button id="btn-north-pole" class="px-3 py-1.5 rounded-lg text-xs font-mono font-medium bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-400/40 transition flex items-center gap-1.5 cursor-pointer">
+          <span class="w-2 h-2 rounded-full bg-[#00d4ff] polar-glow-badge"></span>
+          NORTH POLE (+90°)
+        </button>
+
+        <button id="btn-south-pole" class="px-3 py-1.5 rounded-lg text-xs font-mono font-medium bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-400/40 transition flex items-center gap-1.5 cursor-pointer">
+          <span class="w-2 h-2 rounded-full bg-[#00d4ff] polar-glow-badge"></span>
+          SOUTH POLE (-90°)
+        </button>
+
+        <button id="btn-toggle-rotate" class="px-3 py-1.5 rounded-lg text-xs font-mono font-medium bg-zinc-900/90 hover:bg-zinc-800 text-amber-300 border border-amber-500/30 transition cursor-pointer">
+          ORBIT: ON
+        </button>
+
+        <button id="btn-reset-view" class="px-3 py-1.5 rounded-lg text-xs font-mono font-medium bg-zinc-900/90 hover:bg-zinc-800 text-zinc-200 border border-zinc-700 transition cursor-pointer">
+          RESET
+        </button>
+
+        <button id="btn-toggle-sidebar" class="md:hidden px-3 py-1.5 rounded-lg text-xs font-mono font-medium bg-amber-500/20 text-amber-300 border border-amber-500/40 cursor-pointer">
+          SITES
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Layer 3: Telemetry & Landing Sites Sidebar -->
+  <aside id="sidebar-panel" class="fixed top-[68px] bottom-4 left-4 z-20 w-[calc(100vw-2rem)] sm:w-88 md:w-96 flex flex-col rounded-2xl bg-zinc-950/85 backdrop-blur-xl border border-amber-500/25 shadow-2xl transition-transform duration-300">
+    <!-- Sidebar Header & Model Status -->
+    <div class="p-4 border-b border-zinc-800/90">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-[11px] font-mono uppercase tracking-widest text-amber-400 font-semibold">
+          ACTIVE SECTORS &amp; BEACONS
+        </span>
+        <span id="model-status-pill" class="px-2 py-0.5 text-[10px] font-mono rounded-full bg-teal-500/15 text-teal-300 border border-teal-500/30">
+          LOADING GLB...
+        </span>
+      </div>
+
+      <!-- Filter Pills -->
+      <div id="filter-bar" class="flex flex-wrap gap-1.5 mt-2">
+        <button data-filter="all" class="filter-pill active px-2.5 py-1 rounded-lg text-[11px] font-mono font-semibold bg-amber-500 text-zinc-950 transition cursor-pointer">
+          ALL (8)
+        </button>
+        <button data-filter="polar" class="filter-pill px-2.5 py-1 rounded-lg text-[11px] font-mono font-semibold bg-sky-500/15 text-sky-300 border border-sky-400/40 hover:bg-sky-500/25 transition cursor-pointer">
+          POLAR ICE
+        </button>
+        <button data-filter="sankofa" class="filter-pill px-2.5 py-1 rounded-lg text-[11px] font-mono font-semibold bg-zinc-900 text-zinc-300 border border-zinc-700 hover:border-amber-500/40 transition cursor-pointer">
+          SANKOFA
+        </button>
+        <button data-filter="apollo" class="filter-pill px-2.5 py-1 rounded-lg text-[11px] font-mono font-semibold bg-zinc-900 text-zinc-300 border border-zinc-700 hover:border-amber-500/40 transition cursor-pointer">
+          HISTORIC
+        </button>
+      </div>
+    </div>
+
+    <!-- Scrollable Sites List -->
+    <div id="sites-list" class="flex-1 overflow-y-auto custom-scroll p-3 space-y-2.5">
+      <!-- Populated dynamically via JS -->
+    </div>
+
+    <!-- Selected Site Telemetry Footer -->
+    <div id="telemetry-detail" class="p-4 border-t border-zinc-800/90 bg-zinc-900/60 rounded-b-2xl">
+      <div class="flex items-center justify-between mb-1.5">
+        <span id="detail-code" class="text-xs font-mono font-bold text-sky-400">SANKOFA-POLE-S</span>
+        <span id="detail-coords" class="text-[11px] font-mono text-zinc-400">89.6°S, 130.0°E</span>
+      </div>
+      <p id="detail-desc" class="text-xs text-zinc-300 leading-relaxed mb-3">
+        Permanently shadowed rim of Shackleton Crater exhibiting peak surface water-ice signatures and near-continuous solar illumination peaks.
+      </p>
+      <div class="grid grid-cols-3 gap-2 text-center">
+        <div class="p-2 rounded-xl bg-zinc-950/90 border border-zinc-800">
+          <div class="text-[10px] font-mono text-zinc-500">H₂O ICE IDX</div>
+          <div id="detail-ice" class="text-xs font-mono font-bold text-sky-400 mt-0.5">98.2%</div>
+        </div>
+        <div class="p-2 rounded-xl bg-zinc-950/90 border border-zinc-800">
+          <div class="text-[10px] font-mono text-zinc-500">SURFACE TEMP</div>
+          <div id="detail-temp" class="text-xs font-mono font-bold text-amber-300 mt-0.5">-224°C</div>
+        </div>
+        <div class="p-2 rounded-xl bg-zinc-950/90 border border-zinc-800">
+          <div class="text-[10px] font-mono text-zinc-500">ELEVATION</div>
+          <div id="detail-elev" class="text-xs font-mono font-bold text-teal-300 mt-0.5">-4.2 km</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Floating Bottom-Right Legend & Live Cursor Coordinates -->
+  <div class="fixed bottom-4 right-4 z-20 hidden sm:flex flex-col items-end gap-2 pointer-events-none">
+    <div class="px-3.5 py-2.5 rounded-xl bg-zinc-950/85 backdrop-blur-md border border-amber-500/25 text-[11px] font-mono text-zinc-300 shadow-xl space-y-1.5">
+      <div class="flex items-center gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-[#00d4ff] shadow-[0_0_8px_#00d4ff]"></span>
+        <span>Polar Water-Ice Anomaly (±82°–90°)</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-[#e5a132]"></span>
+        <span>Sankofa Deep-Space Relay Beacon</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-[#389e8a]"></span>
+        <span>Historic Lunar Landing Zone</span>
+      </div>
+      <div class="pt-1 border-t border-zinc-800 text-[10px] text-zinc-400">
+        DRAG TO ROTATE • SCROLL TO ZOOM • CLICK BEACON
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Banner (Replaces alert) -->
+  <div id="toast-banner" class="fixed top-20 right-4 z-30 px-4 py-2.5 rounded-xl bg-zinc-900/95 border border-amber-500/40 text-xs font-mono text-amber-200 shadow-2xl opacity-0 pointer-events-none transition-opacity duration-300">
+    Sector locked.
+  </div>
+
+  <script>
+    /**
+     * =========================================================================
+     * 1. PROCEDURAL AFRICAN GEOMETRIC TEXTILE GENERATOR
+     *    Inspired by traditional Kente / Mudcloth geometric column weaves:
+     *    Deep obsidian base (#09090b), ochre gold (#e5a132), terracotta crimson
+     *    (#dc3c28), and turquoise teal (#389e8a).
+     * =========================================================================
+     */
+    function createAfricanTextileTile() {
+      const tileW = 240;
+      const tileH = 480;
+      const tile = document.createElement('canvas');
+      tile.width = tileW;
+      tile.height = tileH;
+      const ctx = tile.getContext('2d');
+
+      const BG = '#09090b';
+      const GOLD = '#e5a132';
+      const RED = '#dc3c28';
+      const TEAL = '#389e8a';
+      const COLORS = [GOLD, RED, TEAL];
+
+      // Fill obsidian background
+      ctx.fillStyle = BG;
+      ctx.fillRect(0, 0, tileW, tileH);
+
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      // Helper: Vertical beaded/dashed divider rail
+      function drawBeadedRail(x) {
+        ctx.fillStyle = 'rgba(229, 161, 50, 0.25)';
+        ctx.fillRect(x - 1, 0, 2, tileH);
+        for (let y = 6; y < tileH; y += 16) {
+          ctx.fillStyle = GOLD;
+          ctx.fillRect(x - 2.5, y, 5, 8);
+          ctx.fillStyle = BG;
+          ctx.fillRect(x - 1, y + 3, 2, 2);
+        }
+      }
+
+      // Helper: Nested Concentric Diamond Motif
+      function drawConcentricDiamond(cx, cy, rx, ry) {
+        const layers = [
+          { scale: 1.0, color: TEAL, lw: 3 },
+          { scale: 0.72, color: RED, lw: 2.5 },
+          { scale: 0.45, color: GOLD, lw: 2.2 },
+          { scale: 0.2, color: RED, fill: true }
+        ];
+        layers.forEach(l => {
+          ctx.beginPath();
+          ctx.moveTo(cx, cy - ry * l.scale);
+          ctx.lineTo(cx + rx * l.scale, cy);
+          ctx.lineTo(cx, cy + ry * l.scale);
+          ctx.lineTo(cx - rx * l.scale, cy);
+          ctx.closePath();
+          if (l.fill) {
+            ctx.fillStyle = l.color;
+            ctx.fill();
+          } else {
+            ctx.strokeStyle = l.color;
+            ctx.lineWidth = l.lw;
+            ctx.stroke();
+          }
+        });
+      }
+
+      // Helper: Crisscross Diagonal Lattice Band
+      function drawCrisscrossLattice(x, y, w, h, step = 12) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x, y, w, h);
+        ctx.clip();
+
+        let idx = 0;
+        for (let offset = -h; offset < w + h; offset += step) {
+          ctx.strokeStyle = COLORS[idx % 3];
+          ctx.lineWidth = 2.6;
+
+          // Forward diagonal
+          ctx.beginPath();
+          ctx.moveTo(x + offset, y);
+          ctx.lineTo(x + offset + h, y + h);
+          ctx.stroke();
+
+          // Backward diagonal
+          ctx.strokeStyle = COLORS[(idx + 1) % 3];
+          ctx.beginPath();
+          ctx.moveTo(x + w - offset, y);
+          ctx.lineTo(x + w - offset - h, y + h);
+          ctx.stroke();
+
+          idx++;
+        }
+        ctx.restore();
+      }
+
+      // Helper: 3x3 Bold Polychrome Dot Matrix
+      function drawDotMatrix(cx, cy, spacing = 15, radius = 4.6) {
+        const pattern = [
+          [GOLD, TEAL, GOLD],
+          [RED, RED, RED],
+          [GOLD, TEAL, GOLD]
+        ];
+        for (let r = -1; r <= 1; r++) {
+          for (let c = -1; c <= 1; c++) {
+            ctx.beginPath();
+            ctx.arc(cx + c * spacing, cy + r * spacing, radius, 0, Math.PI * 2);
+            ctx.fillStyle = pattern[r + 1][c + 1];
+            ctx.fill();
+          }
+        }
+      }
+
+      // Helper: Bold X-Wing Hourglass Motif with Red Diamond Accents
+      function drawXWingHourglass(cx, cy, w, h) {
+        const halfW = w * 0.5;
+        const halfH = h * 0.5;
+
+        // Outer gold X strokes
+        ctx.strokeStyle = GOLD;
+        ctx.lineWidth = 5.5;
+        ctx.beginPath();
+        ctx.moveTo(cx - halfW, cy - halfH);
+        ctx.quadraticCurveTo(cx - 4, cy, cx - halfW, cy + halfH);
+        ctx.moveTo(cx + halfW, cy - halfH);
+        ctx.quadraticCurveTo(cx + 4, cy, cx + halfW, cy + halfH);
+        ctx.stroke();
+
+        // Inner nested chevrons on left & right wings
+        [TEAL, RED].forEach((col, i) => {
+          const inset = (i + 1) * 9;
+          ctx.strokeStyle = col;
+          ctx.lineWidth = 2.6;
+          ctx.beginPath();
+          ctx.moveTo(cx - halfW + inset, cy - halfH + inset * 0.8);
+          ctx.lineTo(cx - inset * 0.9, cy);
+          ctx.lineTo(cx - halfW + inset, cy + halfH - inset * 0.8);
+
+          ctx.moveTo(cx + halfW - inset, cy - halfH + inset * 0.8);
+          ctx.lineTo(cx + inset * 0.9, cy);
+          ctx.lineTo(cx + halfW - inset, cy + halfH - inset * 0.8);
+          ctx.stroke();
+        });
+
+        // Top & bottom crimson diamond lozenges
+        [cy - halfH + 8, cy + halfH - 8].forEach(dy => {
+          ctx.beginPath();
+          ctx.moveTo(cx, dy - 11);
+          ctx.lineTo(cx + 7, dy);
+          ctx.lineTo(cx, dy + 11);
+          ctx.lineTo(cx - 7, dy);
+          ctx.closePath();
+          ctx.fillStyle = RED;
+          ctx.fill();
+        });
+      }
+
+      // Helper: Vertical Pillar & Stacked V-Chevron Block
+      function drawChevronPillars(cx, y, h) {
+        // Outer tapered ochre gold pillars
+        ctx.fillStyle = GOLD;
+        ctx.fillRect(cx - 24, y, 6, h);
+        ctx.fillRect(cx + 18, y, 6, h);
+
+        // Center teal vertical bar
+        ctx.fillStyle = TEAL;
+        ctx.fillRect(cx - 3.5, y + 4, 7, h - 8);
+
+        // Stacked V-chevrons flanking center bar
+        for (let py = y + 10; py < y + h - 8; py += 16) {
+          [-11, 11].forEach((offsetX, idx) => {
+            ctx.strokeStyle = idx === 0 ? GOLD : RED;
+            ctx.lineWidth = 2.4;
+            ctx.beginPath();
+            ctx.moveTo(cx + offsetX - 3.5, py - 4);
+            ctx.lineTo(cx + offsetX, py + 4);
+            ctx.lineTo(cx + offsetX + 3.5, py - 4);
+            ctx.stroke();
+          });
+        }
+      }
+
+      // Helper: Micro-beaded Vertical Grid Block
+      function drawMicroGridBlock(cx, y, h) {
+        // Center vertical stripes
+        [-4, 0, 4].forEach((dx, i) => {
+          ctx.fillStyle = COLORS[i];
+          ctx.fillRect(cx + dx - 1, y, 2, h);
+        });
+        // Flanking micro dot columns
+        for (let py = y + 4; py < y + h; py += 8) {
+          [-20, -14, 14, 20].forEach((dx, i) => {
+            ctx.fillStyle = COLORS[(i + Math.floor(py / 8)) % 3];
+            ctx.beginPath();
+            ctx.arc(cx + dx, py, 2.1, 0, Math.PI * 2);
+            ctx.fill();
+          });
+        }
+      }
+
+      // Draw 3 Vertical Columns + Beaded Dividers across 240px width
+      const colWidth = 80;
+      for (let col = 0; col < 3; col++) {
+        const x0 = col * colWidth;
+        const cx = x0 + colWidth * 0.5;
+
+        // Vertical rail separator
+        drawBeadedRail(x0);
+
+        if (col % 2 === 0) {
+          // Column Pattern A (0 & 2)
+          drawMicroGridBlock(cx, 8, 52);
+          drawCrisscrossLattice(x0 + 10, 68, colWidth - 20, 64, 11);
+          drawConcentricDiamond(cx, 168, 24, 30);
+          drawCrisscrossLattice(x0 + 10, 206, colWidth - 20, 56, 11);
+          drawDotMatrix(cx, 294, 15, 4.5);
+          drawChevronPillars(cx, 328, 86);
+          drawConcentricDiamond(cx, 446, 24, 26);
+        } else {
+          // Column Pattern B (Center offset weave)
+          drawConcentricDiamond(cx, 36, 24, 28);
+          drawCrisscrossLattice(x0 + 10, 74, colWidth - 20, 62, 11);
+          drawXWingHourglass(cx, 194, 56, 92);
+          drawDotMatrix(cx, 272, 15, 4.5);
+          drawCrisscrossLattice(x0 + 10, 308, colWidth - 20, 66, 11);
+          drawConcentricDiamond(cx, 412, 24, 30);
+          drawMicroGridBlock(cx, 448, 28);
+        }
+      }
+
+      return tile;
+    }
+
+    function renderAfricanBackground() {
+      const bgCanvas = document.getElementById('african-pattern-bg');
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      bgCanvas.width = window.innerWidth * dpr;
+      bgCanvas.height = window.innerHeight * dpr;
+
+      const ctx = bgCanvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+
+      const tile = createAfricanTextileTile();
+      const pattern = ctx.createPattern(tile, 'repeat');
+      ctx.fillStyle = pattern;
+      ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+
+      // Also render the horizontal woven accent strip at the top of the header
+      const strip = document.getElementById('header-weave-strip');
+      if (strip) {
+        strip.width = window.innerWidth;
+        strip.height = 8;
+        const sCtx = strip.getContext('2d');
+        const stripeColors = ['#e5a132', '#dc3c28', '#389e8a', '#09090b'];
+        const segW = 24;
+        for (let x = 0; x < strip.width; x += segW) {
+          const c = stripeColors[Math.floor(x / segW) % stripeColors.length];
+          sCtx.fillStyle = c;
+          sCtx.fillRect(x, 0, segW, 8);
+          // Tiny diamond notch
+          sCtx.fillStyle = '#09090b';
+          sCtx.fillRect(x + segW * 0.5 - 2, 2, 4, 4);
+        }
+      }
+    }
+
+    /**
+     * =========================================================================
+     * 2. LUNAR SITES DATA (INCLUDING NEW NORTH & SOUTH POLAR ICE SITES)
+     * =========================================================================
+     */
+    const SITES = [
+      {
+        id: 'SANKOFA-POLE-S',
+        name: 'South Pole — Shackleton Rim',
+        lat: -89.6,
+        lon: 130.0,
+        category: 'polar',
+        iceIndex: '98.2%',
+        temp: '-224°C',
+        elevation: '-4.2 km',
+        color: '#00d4ff',
+        description: 'Permanently shadowed interior of Shackleton Crater exhibiting peak surface water-ice signatures and near-continuous solar illumination ridges.'
+      },
+      {
+        id: 'SANKOFA-POLE-N',
+        name: 'North Pole — Peary Crater',
+        lat: 89.2,
+        lon: 25.0,
+        category: 'polar',
+        iceIndex: '94.8%',
+        temp: '-218°C',
+        elevation: '-3.1 km',
+        color: '#00d4ff',
+        description: 'High-latitude northern cold trap inside Peary Crater containing subsurface water-ice deposits and hydrogen enrichment anomalies.'
+      },
+      {
+        id: 'SANKOFA-01',
+        name: 'Mare Tranquillitatis Relay',
+        lat: 0.674,
+        lon: 23.473,
+        category: 'sankofa',
+        iceIndex: '1.4%',
+        temp: '-23°C',
+        elevation: '-1.8 km',
+        color: '#e5a132',
+        description: 'Primary equatorial laser-optical communications node linking lunar surface rovers with Addis Ababa & global deep-space ground stations.'
+      },
+      {
+        id: 'SANKOFA-02',
+        name: 'Tycho Central Peak Array',
+        lat: -43.31,
+        lon: -11.36,
+        category: 'sankofa',
+        iceIndex: '6.8%',
+        temp: '-68°C',
+        elevation: '+2.0 km',
+        color: '#e5a132',
+        description: 'High-altitude southern highlands seismometer and impact-melt mineralogy observatory positioned atop Tycho’s central uplift.'
+      },
+      {
+        id: 'SANKOFA-03',
+        name: 'Aristarchus Plateau Outpost',
+        lat: 23.73,
+        lon: -47.49,
+        category: 'sankofa',
+        iceIndex: '4.1%',
+        temp: '-41°C',
+        elevation: '+1.6 km',
+        color: '#e5a132',
+        description: 'Volcanic pyroclastic glass and thorium-rich regolith extraction testbed on the brightest crustal anomaly of the lunar nearside.'
+      },
+      {
+        id: 'APOLLO-11',
+        name: 'Tranquility Base (Apollo 11)',
+        lat: 0.6741,
+        lon: 23.4730,
+        category: 'apollo',
+        iceIndex: '1.2%',
+        temp: '-22°C',
+        elevation: '-1.9 km',
+        color: '#389e8a',
+        description: 'First crewed lunar landing site (July 20, 1969). Protected heritage zone with retroreflector array still returning Earth-Moon ranging pulses.'
+      },
+      {
+        id: 'APOLLO-15',
+        name: 'Hadley–Apennine (Apollo 15)',
+        lat: 26.1322,
+        lon: 3.6339,
+        category: 'apollo',
+        iceIndex: '3.5%',
+        temp: '-46°C',
+        elevation: '-0.8 km',
+        color: '#389e8a',
+        description: 'Rille and mountain-front geological traverse site at the edge of Mare Imbrium where anorthositic Genesis Rock samples were recovered.'
+      },
+      {
+        id: 'CHANG-E-4',
+        name: 'Von Kármán Crater (Farside)',
+        lat: -45.457,
+        lon: 177.588,
+        category: 'apollo',
+        iceIndex: '11.3%',
+        temp: '-74°C',
+        elevation: '-5.9 km',
+        color: '#389e8a',
+        description: 'South Pole–Aitken Basin farside landing zone probing deep lunar mantle composition shielded from terrestrial radio interference.'
+      }
+    ];
+
+    /**
+     * =========================================================================
+     * 3. THREE.JS 3D LUNAR SCENE, BLUE POLAR CAPS & BEACON SYSTEM
+     * =========================================================================
+     */
+    let scene, camera, renderer, controls;
+    let moonGroup, moonMesh;
+    let northIceCap, southIceCap, northAuroraRing, southAuroraRing;
+    let beaconObjects = [];
+    let autoRotate = true;
+    let activeFilter = 'all';
+    let selectedSiteId = 'SANKOFA-POLE-S';
+    let targetCameraPos = null;
+    const MOON_RADIUS = 2.2;
+
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+
+    function latLonToVector3(lat, lon, radius) {
+      const phi = (90 - lat) * (Math.PI / 180);
+      const theta = (lon + 180) * (Math.PI / 180);
+      const x = -(radius * Math.sin(phi) * Math.cos(theta));
+      const z = radius * Math.sin(phi) * Math.sin(theta);
+      const y = radius * Math.cos(phi);
+      return new THREE.Vector3(x, y, z);
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast-banner');
+      toast.textContent = msg;
+      toast.style.opacity = '1';
+      clearTimeout(toast._timer);
+      toast._timer = setTimeout(() => {
+        toast.style.opacity = '0';
+      }, 2400);
+    }
+
+    /**
+     * Creates luminous electric ice-blue (#00d4ff) North & South Pole shader caps
+     * and subtle polar energy halos so both poles visibly glow with water-ice signatures.
+     */
+    function buildPolarIceCaps(radius) {
+      const polarShaderMat = new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        side: THREE.FrontSide,
+        uniforms: {
+          uTime: { value: 0 },
+          uIceColorCore: { value: new THREE.Color('#00d4ff') },
+          uIceColorEdge: { value: new THREE.Color('#0284c7') }
+        },
+        vertexShader: `
+          varying vec3 vNormal;
+          varying vec3 vLocalPos;
+          void main() {
+            vNormal = normalize(normalMatrix * normal);
+            vLocalPos = normalize(position);
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform float uTime;
+          uniform vec3 uIceColorCore;
+          uniform vec3 uIceColorEdge;
+          varying vec3 vNormal;
+          varying vec3 vLocalPos;
+
+          void main() {
+            // Distance from pole axis (abs(y) == 1.0 right at North/South pole)
+            float poleFactor = abs(vLocalPos.y);
+            // Smooth radial falloff from 90 deg down to ~74 deg latitude
+            float capMask = smoothstep(0.92, 0.996, poleFactor);
+
+            // Subtle shimmering crystalline pulse
+            float shimmer = 0.85 + 0.15 * sin(uTime * 2.5 + vLocalPos.x * 18.0 + vLocalPos.z * 18.0);
+            float coreIntensity = smoothstep(0.965, 1.0, poleFactor);
+
+            vec3 finalColor = mix(uIceColorEdge, uIceColorCore, coreIntensity) * shimmer;
+            float alpha = capMask * (0.62 + 0.35 * coreIntensity);
+
+            gl_FragColor = vec4(finalColor, alpha);
+          }
+        `
+      });
+
+      // Slightly larger sphere shell hugging the Moon surface at both poles
+      const capGeo = new THREE.SphereGeometry(radius * 1.007, 64, 64);
+      const polarShell = new THREE.Mesh(capGeo, polarShaderMat);
+      polarShell.userData.polarMaterial = polarShaderMat;
+      moonGroup.add(polarShell);
+
+      // Add glowing polar latitude rings & vertical ice-plume beacons at +Y and -Y
+      const ringGeo = new THREE.RingGeometry(radius * 0.14, radius * 0.21, 64);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: 0x00d4ff,
+        transparent: true,
+        opacity: 0.55,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+
+      northAuroraRing = new THREE.Mesh(ringGeo, ringMat.clone());
+      northAuroraRing.position.set(0, radius * 0.992, 0);
+      northAuroraRing.rotation.x = -Math.PI / 2;
+      moonGroup.add(northAuroraRing);
+
+      southAuroraRing = new THREE.Mesh(ringGeo, ringMat.clone());
+      southAuroraRing.position.set(0, -radius * 0.992, 0);
+      southAuroraRing.rotation.x = Math.PI / 2;
+      moonGroup.add(southAuroraRing);
+
+      // Soft volumetric glow sprites right at North & South Poles
+      const glowCanvas = document.createElement('canvas');
+      glowCanvas.width = 128;
+      glowCanvas.height = 128;
+      const gCtx = glowCanvas.getContext('2d');
+      const grad = gCtx.createRadialGradient(64, 64, 4, 64, 64, 62);
+      grad.addColorStop(0, 'rgba(0, 212, 255, 0.95)');
+      grad.addColorStop(0.35, 'rgba(56, 189, 248, 0.45)');
+      grad.addColorStop(1, 'rgba(0, 212, 255, 0.0)');
+      gCtx.fillStyle = grad;
+      gCtx.fillRect(0, 0, 128, 128);
+
+      const spriteTex = new THREE.CanvasTexture(glowCanvas);
+      const spriteMat = new THREE.SpriteMaterial({
+        map: spriteTex,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+
+      northIceCap = new THREE.Sprite(spriteMat);
+      northIceCap.position.set(0, radius * 1.03, 0);
+      northIceCap.scale.set(1.15, 1.15, 1);
+      moonGroup.add(northIceCap);
+
+      southIceCap = new THREE.Sprite(spriteMat.clone());
+      southIceCap.position.set(0, -radius * 1.03, 0);
+      southIceCap.scale.set(1.25, 1.25, 1);
+      moonGroup.add(southIceCap);
+    }
+
+    /**
+     * Procedural cratered lunar sphere fallback if 'assets/moon_small.glb'
+     * is unavailable or opened directly without a local server.
+     */
+    function createProceduralMoonFallback(radius) {
+      const texCanvas = document.createElement('canvas');
+      texCanvas.width = 1024;
+      texCanvas.height = 512;
+      const ctx = texCanvas.getContext('2d');
+
+      // Base lunar highland grey
+      ctx.fillStyle = '#8b8d91';
+      ctx.fillRect(0, 0, 1024, 512);
+
+      // Dark basaltic maria patches
+      const maria = [
+        { x: 560, y: 210, r: 95 },
+        { x: 460, y: 185, r: 115 },
+        { x: 350, y: 230, r: 80 },
+        { x: 640, y: 255, r: 65 }
+      ];
+      maria.forEach(m => {
+        const g = ctx.createRadialGradient(m.x, m.y, 10, m.x, m.y, m.r);
+        g.addColorStop(0, 'rgba(55, 58, 64, 0.72)');
+        g.addColorStop(1, 'rgba(55, 58, 64, 0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(m.x, m.y, m.r, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Procedural impact craters
+      for (let i = 0; i < 420; i++) {
+        const cx = Math.random() * 1024;
+        const cy = Math.random() * 512;
+        const cr = 2 + Math.random() * 16;
+        ctx.strokeStyle = 'rgba(215, 218, 224, 0.25)';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, cr, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = 'rgba(42, 44, 48, 0.25)';
+        ctx.beginPath();
+        ctx.arc(cx + 1, cy + 1, cr * 0.85, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      const diffuseTex = new THREE.CanvasTexture(texCanvas);
+      const geo = new THREE.SphereGeometry(radius, 64, 64);
+      const mat = new THREE.MeshStandardMaterial({
+        map: diffuseTex,
+        bumpMap: diffuseTex,
+        bumpScale: 0.035,
+        roughness: 0.88,
+        metalness: 0.04
+      });
+      return new THREE.Mesh(geo, mat);
+    }
+
+    function buildSiteBeacons() {
+      // Remove existing beacons if rebuilt
+      beaconObjects.forEach(b => moonGroup.remove(b.group));
+      beaconObjects = [];
+
+      SITES.forEach(site => {
+        const group = new THREE.Group();
+        const pos = latLonToVector3(site.lat, site.lon, MOON_RADIUS);
+        group.position.copy(pos);
+
+        // Align beacon local +Y with surface normal
+        const normal = pos.clone().normalize();
+        group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
+
+        const isPolar = site.category === 'polar';
+        const colorHex = new THREE.Color(site.color);
+
+        // Core beacon sphere
+        const dotGeo = new THREE.SphereGeometry(isPolar ? 0.055 : 0.042, 16, 16);
+        const dotMat = new THREE.MeshBasicMaterial({ color: colorHex });
+        const dotMesh = new THREE.Mesh(dotGeo, dotMat);
+        dotMesh.position.y = 0.025;
+        dotMesh.userData = { siteId: site.id };
+        group.add(dotMesh);
+
+        // Pulsing surface ring
+        const ringGeo = new THREE.RingGeometry(0.06, isPolar ? 0.115 : 0.09, 32);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: colorHex,
+          transparent: true,
+          opacity: 0.85,
+          side: THREE.DoubleSide
+        });
+        const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+        ringMesh.rotation.x = -Math.PI / 2;
+        ringMesh.position.y = 0.015;
+        group.add(ringMesh);
+
+        // Vertical telemetry spire for Polar & Sankofa sites
+        const spireHeight = isPolar ? 0.34 : 0.22;
+        const spireGeo = new THREE.CylinderGeometry(0.005, 0.014, spireHeight, 8);
+        const spireMat = new THREE.MeshBasicMaterial({
+          color: colorHex,
+          transparent: true,
+          opacity: 0.75
+        });
+        const spireMesh = new THREE.Mesh(spireGeo, spireMat);
+        spireMesh.position.y = spireHeight * 0.5 + 0.02;
+        group.add(spireMesh);
+
+        moonGroup.add(group);
+        beaconObjects.push({
+          site,
+          group,
+          dotMesh,
+          ringMesh
+        });
+      });
+    }
+
+    function initThreeScene() {
+      const container = document.getElementById('webgl-container');
+
+      scene = new THREE.Scene();
+      // Transparent background so our African Geometric Textile canvas shines through!
+
+      camera = new THREE.PerspectiveCamera(
+        42,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        100
+      );
+      camera.position.set(0.4, 1.4, 6.4);
+
+      renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: true,
+        powerPreference: 'high-performance'
+      });
+      renderer.setClearColor(0x000000, 0);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.outputEncoding = THREE.sRGBEncoding;
+      container.appendChild(renderer.domElement);
+
+      // OrbitControls
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.06;
+      controls.minDistance = 3.2;
+      controls.maxDistance = 12.0;
+      controls.enablePan = false;
+
+      // Offset Moon slightly right on wide screens so the left sidebar doesn't cover it
+      function updateCameraOffset() {
+        if (window.innerWidth >= 768) {
+          camera.setViewOffset(
+            window.innerWidth,
+            window.innerHeight,
+            -170,
+            0,
+            window.innerWidth,
+            window.innerHeight
+          );
+        } else {
+          camera.clearViewOffset();
+        }
+      }
+      updateCameraOffset();
+      window.addEventListener('resize', updateCameraOffset);
+
+      // Lighting setup (Crisp solar key light + cool polar rim fill)
+      const sunLight = new THREE.DirectionalLight(0xfff8eb, 1.85);
+      sunLight.position.set(6, 3.5, 5);
+      scene.add(sunLight);
+
+      const ambientLight = new THREE.AmbientLight(0x384152, 0.55);
+      scene.add(ambientLight);
+
+      const polarRimLight = new THREE.DirectionalLight(0x00d4ff, 0.5);
+      polarRimLight.position.set(-4, -5, -4);
+      scene.add(polarRimLight);
+
+      // Root Moon Group
+      moonGroup = new THREE.Group();
+      scene.add(moonGroup);
+
+      // Build Glowing Blue North & South Pole Ice Caps + Site Beacons
+      buildPolarIceCaps(MOON_RADIUS);
+      buildSiteBeacons();
+
+      // Attempt to load local NASA GLB ('assets/moon_small.glb'), fallback cleanly if needed
+      const statusPill = document.getElementById('model-status-pill');
+      const loader = new THREE.GLTFLoader();
+
+      loader.load(
+        'assets/moon_small.glb',
+        (gltf) => {
+          const model = gltf.scene;
+
+          // Normalize GLB bounding box to match MOON_RADIUS
+          const box = new THREE.Box3().setFromObject(model);
+          const size = new THREE.Vector3();
+          box.getSize(size);
+          const maxDim = Math.max(size.x, size.y, size.z);
+          const scale = (MOON_RADIUS * 2) / (maxDim || 1);
+          model.scale.setScalar(scale);
+
+          // Center model at origin
+          const scaledBox = new THREE.Box3().setFromObject(model);
+          const center = new THREE.Vector3();
+          scaledBox.getCenter(center);
+          model.position.sub(center);
+
+          moonMesh = model;
+          moonGroup.add(moonMesh);
+
+          statusPill.textContent = 'NASA GLB ACTIVE';
+          statusPill.className =
+            'px-2 py-0.5 text-[10px] font-mono rounded-full bg-teal-500/20 text-teal-300 border border-teal-400/40';
+        },
+        undefined,
+        () => {
+          // Fallback procedural lunar sphere if GLB is unreachable
+          moonMesh = createProceduralMoonFallback(MOON_RADIUS);
+          moonGroup.add(moonMesh);
+
+          statusPill.textContent = 'PROCEDURAL LRO';
+          statusPill.className =
+            'px-2 py-0.5 text-[10px] font-mono rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/40';
+        }
+      );
+
+      // Pointer click raycasting on 3D beacons
+      renderer.domElement.addEventListener('pointerdown', (e) => {
+        const rect = renderer.domElement.getBoundingClientRect();
+        pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+        raycaster.setFromCamera(pointer, camera);
+        const targets = beaconObjects.map(b => b.dotMesh);
+        const hits = raycaster.intersectObjects(targets, false);
+
+        if (hits.length > 0) {
+          const hitSiteId = hits[0].object.userData.siteId;
+          if (hitSiteId) {
+            focusOnSite(hitSiteId);
+          }
+        }
+      });
+
+      // Handle window resize
+      window.addEventListener('resize', () => {
+        renderAfricanBackground();
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+    }
+
+    /**
+     * =========================================================================
+     * 4. UI SIDEBAR RENDERING & CAMERA FOCUS LOGIC
+     * =========================================================================
+     */
+    function focusOnSite(siteId) {
+      const site = SITES.find(s => s.id === siteId);
+      if (!site) return;
+
+      selectedSiteId = siteId;
+      autoRotate = false;
+      document.getElementById('btn-toggle-rotate').textContent = 'ORBIT: OFF';
+
+      // Update detail card
+      document.getElementById('detail-code').textContent = site.id;
+      document.getElementById('detail-code').style.color = site.color;
+      const latDir = site.lat >= 0 ? 'N' : 'S';
+      const lonDir = site.lon >= 0 ? 'E' : 'W';
+      document.getElementById('detail-coords').textContent =
+        `${Math.abs(site.lat).toFixed(1)}°${latDir}, ${Math.abs(site.lon).toFixed(1)}°${lonDir}`;
+      document.getElementById('detail-desc').textContent = site.description;
+      document.getElementById('detail-ice').textContent = site.iceIndex;
+      document.getElementById('detail-temp').textContent = site.temp;
+      document.getElementById('detail-elev').textContent = site.elevation;
+
+      // Compute world position of the selected beacon and smoothly fly camera toward it
+      const localPos = latLonToVector3(site.lat, site.lon, MOON_RADIUS);
+      const worldPos = localPos.clone().applyMatrix4(moonGroup.matrixWorld).normalize();
+      targetCameraPos = worldPos.multiplyScalar(5.4);
+
+      renderSitesList();
+      showToast(`LOCKED: ${site.name}`);
+    }
+
+    function renderSitesList() {
+      const listEl = document.getElementById('sites-list');
+      listEl.innerHTML = '';
+
+      const filtered = SITES.filter(s =>
+        activeFilter === 'all' ? true : s.category === activeFilter
+      );
+
+      filtered.forEach(site => {
+        const isSelected = site.id === selectedSiteId;
+        const isPolar = site.category === 'polar';
+
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = `w-full text-left p-3 rounded-xl border transition cursor-pointer ${
+          isSelected
+            ? isPolar
+              ? 'bg-sky-500/15 border-sky-400/70 shadow-lg shadow-sky-500/10'
+              : 'bg-amber-500/15 border-amber-400/70 shadow-lg shadow-amber-500/10'
+            : 'bg-zinc-900/75 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900'
+        }`;
+
+        const latLabel = `${Math.abs(site.lat).toFixed(1)}°${site.lat >= 0 ? 'N' : 'S'}`;
+        const lonLabel = `${Math.abs(site.lon).toFixed(1)}°${site.lon >= 0 ? 'E' : 'W'}`;
+
+        card.innerHTML = `
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:${site.color}; box-shadow: 0 0 8px ${site.color};"></span>
+              <span class="text-xs font-mono font-bold text-zinc-100">${site.id}</span>
+            </div>
+            <span class="text-[10px] font-mono px-2 py-0.5 rounded-md ${
+              isPolar
+                ? 'bg-sky-500/20 text-sky-300 border border-sky-400/30'
+                : 'bg-zinc-800 text-zinc-300'
+            }">
+              ICE ${site.iceIndex}
+            </span>
+          </div>
+          <div class="text-xs font-medium text-zinc-300 truncate">${site.name}</div>
+          <div class="flex items-center justify-between mt-1.5 text-[10px] font-mono text-zinc-500">
+            <span>${latLabel} • ${lonLabel}</span>
+            <span>TEMP: ${site.temp}</span>
+          </div>
+        `;
+
+        card.addEventListener('click', () => focusOnSite(site.id));
+        listEl.appendChild(card);
+      });
+    }
+
+    function bindUIEvents() {
+      // Filter pills
+      document.querySelectorAll('.filter-pill').forEach(btn => {
+        btn.addEventListener('click', () => {
+          activeFilter = btn.dataset.filter;
+          document.querySelectorAll('.filter-pill').forEach(p => {
+            p.classList.remove('bg-amber-500', 'text-zinc-950');
+            if (p.dataset.filter === 'polar') {
+              p.className =
+                'filter-pill px-2.5 py-1 rounded-lg text-[11px] font-mono font-semibold bg-sky-500/15 text-sky-300 border border-sky-400/40 hover:bg-sky-500/25 transition cursor-pointer';
+            } else {
+              p.className =
+                'filter-pill px-2.5 py-1 rounded-lg text-[11px] font-mono font-semibold bg-zinc-900 text-zinc-300 border border-zinc-700 hover:border-amber-500/40 transition cursor-pointer';
+            }
+          });
+
+          btn.className =
+            'filter-pill px-2.5 py-1 rounded-lg text-[11px] font-mono font-semibold bg-amber-500 text-zinc-950 transition cursor-pointer';
+          renderSitesList();
+        });
+      });
+
+      // North & South Pole quick navigation buttons
+      document.getElementById('btn-north-pole').addEventListener('click', () => {
+        focusOnSite('SANKOFA-POLE-N');
+      });
+
+      document.getElementById('btn-south-pole').addEventListener('click', () => {
+        focusOnSite('SANKOFA-POLE-S');
+      });
+
+      // Auto-orbit toggle
+      const rotateBtn = document.getElementById('btn-toggle-rotate');
+      rotateBtn.addEventListener('click', () => {
+        autoRotate = !autoRotate;
+        targetCameraPos = null;
+        rotateBtn.textContent = autoRotate ? 'ORBIT: ON' : 'ORBIT: OFF';
+      });
+
+      // Reset camera view
+      document.getElementById('btn-reset-view').addEventListener('click', () => {
+        targetCameraPos = new THREE.Vector3(0.4, 1.4, 6.4);
+        autoRotate = true;
+        rotateBtn.textContent = 'ORBIT: ON';
+        showToast('GLOBAL ORBIT RESTORED');
+      });
+
+      // Mobile sidebar toggle
+      const sidebar = document.getElementById('sidebar-panel');
+      document.getElementById('btn-toggle-sidebar').addEventListener('click', () => {
+        sidebar.classList.toggle('-translate-x-[110%]');
+      });
+    }
+
+    /**
+     * =========================================================================
+     * 5. MAIN ANIMATION LOOP
+     * =========================================================================
+     */
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const elapsed = clock.getElapsedTime();
+
+      // Update polar ice shader shimmer & aurora rings
+      moonGroup.children.forEach(child => {
+        if (child.userData && child.userData.polarMaterial) {
+          child.userData.polarMaterial.uniforms.uTime.value = elapsed;
+        }
+      });
+
+      if (northAuroraRing && southAuroraRing) {
+        const pulseScale = 1 + Math.sin(elapsed * 2.6) * 0.14;
+        northAuroraRing.scale.set(pulseScale, pulseScale, 1);
+        southAuroraRing.scale.set(pulseScale, pulseScale, 1);
+      }
+
+      // Pulse beacon rings
+      beaconObjects.forEach((b, idx) => {
+        const s = 1 + Math.sin(elapsed * 3.2 + idx) * 0.22;
+        b.ringMesh.scale.set(s, s, 1);
+      });
+
+      // Gentle lunar rotation when autoRotate is active
+      if (autoRotate && moonGroup) {
+        moonGroup.rotation.y += 0.0022;
+      }
+
+      // Smooth camera fly-to interpolation
+      if (targetCameraPos) {
+        camera.position.lerp(targetCameraPos, 0.06);
+        if (camera.position.distanceTo(targetCameraPos) < 0.04) {
+          targetCameraPos = null;
+        }
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    // Initialize everything on window load
+    window.onload = function () {
+      renderAfricanBackground();
+      initThreeScene();
+      bindUIEvents();
+      renderSitesList();
+      animate();
+    };
+  </script>
+</body>
+</html>
